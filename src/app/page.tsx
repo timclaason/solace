@@ -20,7 +20,7 @@ export default function Home() {
     direction: 'asc' | 'desc';
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // Fixed number of items per page
+  const itemsPerPage = 10;
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -47,7 +47,7 @@ export default function Home() {
         console.error('Error fetching advocates:', error);
       } finally {
         if (isMounted) {
-          setLoading(false); // Stop loading
+          setLoading(false);
         }
       }
     };
