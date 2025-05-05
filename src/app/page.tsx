@@ -1,91 +1,116 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
+import { Advocate } from '@/@types';
+import { filterAdvocates } from '@/utilities';
+import SearchBar from './components/SearchBar';
+import Table from './components/ProviderOutputTable';
+import Pagination from './components/Pagination';
+import Loading from './components/Loading';
+import PageHeading from './components/PageHeading';
 
 export default function Home() {
-  const [advocates, setAdvocates] = useState([]);
-  const [filteredAdvocates, setFilteredAdvocates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [advocates, setAdvocates] = useState<Advocate[]>([]);
+  const [filteredAdvocates, setFilteredAdvocates] = useState<Advocate[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof Advocate;
+    direction: 'asc' | 'desc';
+  } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    console.log("fetching advocates...");
-    fetch("/api/advocates").then((response) => {
-      response.json().then((jsonResponse) => {
-        setAdvocates(jsonResponse.data);
-        setFilteredAdvocates(jsonResponse.data);
-      });
-    });
+    const fetchAdvocates = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/advocates');
+        const jsonResponse = await response.json();
+        setAdvocates(jsonResponse.advocates);
+        setFilteredAdvocates(jsonResponse.advocates);
+      } catch (error) {
+        console.error('Error fetching advocates:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAdvocates();
   }, []);
 
-  const onChange = (e) => {
-    const searchTerm = e.target.value;
-
-    document.getElementById("search-term").innerHTML = searchTerm;
-
-    console.log("filtering advocates...");
-    const filteredAdvocates = advocates.filter((advocate) => {
-      return (
-        advocate.firstName.includes(searchTerm) ||
-        advocate.lastName.includes(searchTerm) ||
-        advocate.city.includes(searchTerm) ||
-        advocate.degree.includes(searchTerm) ||
-        advocate.specialties.includes(searchTerm) ||
-        advocate.yearsOfExperience.includes(searchTerm)
-      );
+  const handleSort = (key: keyof Advocate) => {
+    setSortConfig((prev) => {
+      if (prev?.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
     });
-
-    setFilteredAdvocates(filteredAdvocates);
   };
 
-  const onClick = () => {
-    console.log(advocates);
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const onSearchTermInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const searchTerm = e.target.value;
+    setSearchTerm(searchTerm);
+    const filtered = filterAdvocates(advocates, searchTerm);
+    setFilteredAdvocates(filtered);
+    setSortConfig(null);
+  };
+
+  const onResetButtonClick = () => {
     setFilteredAdvocates(advocates);
+    setSortConfig(null);
+    if (inputRef.current) inputRef.current.value = '';
   };
+
+  const sortedAdvocates = [...filteredAdvocates].sort((a, b) => {
+    if (!sortConfig) return 0;
+    const { key, direction } = sortConfig;
+    const aValue = a[key];
+    const bValue = b[key];
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return direction === 'asc'
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    }
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return direction === 'asc' ? aValue - bValue : bValue - aValue;
+    }
+    return 0;
+  });
+
+  const paginatedAdvocates = sortedAdvocates.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+  const totalPages = Math.ceil(sortedAdvocates.length / itemsPerPage);
+
+  if (loading) return <Loading />;
 
   return (
-    <main style={{ margin: "24px" }}>
-      <h1>Solace Advocates</h1>
-      <br />
-      <br />
-      <div>
-        <p>Search</p>
-        <p>
-          Searching for: <span id="search-term"></span>
-        </p>
-        <input style={{ border: "1px solid black" }} onChange={onChange} />
-        <button onClick={onClick}>Reset Search</button>
-      </div>
-      <br />
-      <br />
-      <table>
-        <thead>
-          <th>First Name</th>
-          <th>Last Name</th>
-          <th>City</th>
-          <th>Degree</th>
-          <th>Specialties</th>
-          <th>Years of Experience</th>
-          <th>Phone Number</th>
-        </thead>
-        <tbody>
-          {filteredAdvocates.map((advocate) => {
-            return (
-              <tr>
-                <td>{advocate.firstName}</td>
-                <td>{advocate.lastName}</td>
-                <td>{advocate.city}</td>
-                <td>{advocate.degree}</td>
-                <td>
-                  {advocate.specialties.map((s) => (
-                    <div>{s}</div>
-                  ))}
-                </td>
-                <td>{advocate.yearsOfExperience}</td>
-                <td>{advocate.phoneNumber}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <main style={{ margin: '24px' }}>
+      <PageHeading />
+      <SearchBar
+        searchTerm={searchTerm}
+        onSearchChange={onSearchTermInputChange}
+        onReset={onResetButtonClick}
+        inputRef={inputRef}
+      />
+      <Table
+        advocates={paginatedAdvocates}
+        onSort={handleSort}
+        sortConfig={sortConfig}
+      />
+      <Pagination
+        totalPages={totalPages}
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+      />
     </main>
   );
 }
